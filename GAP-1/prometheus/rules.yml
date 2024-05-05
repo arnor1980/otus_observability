@@ -1,0 +1,245 @@
+groups:
+- name: node_exporter_alerts
+  rules:
+
+  - alert: Node down
+    expr: up{job="monitoring-pi"} == 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      title: Node {{ $labels.instance }} is down
+      description: Failed to scrape {{ $labels.job }} on {{ $labels.instance }} for more than 2 minutes. Node seems down.
+
+  - alert: HostOutOfMemory
+    expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 10
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Host out of memory (instance {{ $labels.instance }})
+      description: Node memory is filling up (< 10% left)\n  VALUE = {{ $value }}
+
+  - alert: HostOutOfDiskSpace
+    expr: (node_filesystem_avail_bytes * 100) / node_filesystem_size_bytes < 10 and ON (instance, device, mountpoint) node_filesystem_readonly == 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Host out of disk space (instance {{ $labels.instance }})
+      description: Disk is almost full (< 10% left)\n  VALUE = {{ $value }}
+
+  - alert: HostOomKillDetected
+    expr: increase(node_vmstat_oom_kill[1m]) > 0
+    for: 0m
+    labels:
+      severity: warning
+    annotations:
+      summary: Host OOM kill detected (instance {{ $labels.instance }})
+      description: OOM kill detected\n  VALUE = {{ $value }}
+
+  - alert: HostClockNotSynchronising
+    expr: min_over_time(node_timex_sync_status[1m]) == 0 and node_timex_maxerror_seconds >= 16
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Host clock not synchronising (instance {{ $labels.instance }})
+      description: Clock not synchronising.\n  VALUE = {{ $value }}
+        
+- name: mysql
+  rules:
+  - alert: mysql_is_running
+    expr: mysql_up == 0
+    for: 30s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical: MySQL is down on the host {{ $labels.instance }}."
+      description: "MySQL has been down for more than 30 seconds"
+
+  - alert: mysql_used_connections
+    expr: (mysql_global_status_max_used_connections / mysql_global_variables_max_connections) * 100 > 80
+    for: 30s
+    labels:
+      severity: warning
+    annotations:
+      summary: "Warning: MySQL connections utilization (>80%) on the host {{ $labels.instance }}"
+      description: "MySQL connections utilization is {{ humanize $value}}%"
+
+  - alert: mysql_used_connections
+    expr: (mysql_global_status_max_used_connections / mysql_global_variables_max_connections) * 100 > 90
+    for: 30s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical: MySQL connections utilization (>90%) on the host {{ $labels.instance }}"
+      description: "MySQL connections utilization is {{ humanize $value}}%"
+
+  - alert: mysql_active_threads
+    expr: mysql_global_status_threads_running > 40
+    for: 60s
+    labels:
+      severity: warning
+    annotations:
+      summary: "Warning: MySQL active threads (>40) on the host {{ $labels.instance }}"
+      description: "MySQL active threads is {{ humanize $value}}"
+
+  - alert: mysql_active_threads
+    expr: mysql_global_status_threads_running > 100
+    for: 60s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical: MySQL active threads (>100) on the host {{ $labels.instance }}"
+      description: "MySQL active threads is {{ humanize $value}}"
+
+  - alert: mysql_replication_is_running
+    expr: (mysql_slave_status_slave_io_running !=1) or (mysql_slave_status_slave_sql_running != 1)
+    for: 60s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical: MySQL replication is broken on the host {{ $labels.instance }}"
+      description: "MySQL replication is broken"
+
+  - alert: mysql_replication_lagging
+    expr: mysql_slave_status_seconds_behind_master > 300
+    for: 60s
+    labels:
+      severity: warning
+    annotations:
+      summary: "Warning: MySQL replication lagging(>300s) on the host {{ $labels.instance }}"
+      description: "MySQL replication lagging is {{ humanize $value}}s"
+
+  - alert: mysql_replication_lagging
+    expr: mysql_slave_status_seconds_behind_master > 600
+    for: 60s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical: MySQL replication lagging(>600s) on the host {{ $labels.instance }}"
+      description: "MySQL replication lagging is {{ humanize $value}}"
+
+- name: nginx
+  rules:
+  - alert: nginx_is_running
+    expr: nginx_up == 0
+    for: 30s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical: Nginx is down on the host {{ $labels.instance }}."
+      description: "Nginx has been down for more than 30 seconds"
+
+  - alert: nginx_not_all_connections_are_handled
+    expr: rate (nginx_connections_handled{job="nginx-exporter"}[5m]) / rate (nginx_connections_accepted{job="nginx-exporter"}[5m]) <1 
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: "Critical: Nginx does not handle all accept connections on the host {{ $labels.instance }} for more than 3 minutes"
+      summary: "Nginx issue with handling connections"
+
+  - alert: nginx_high_number_active_connections_f3.mydomain.com
+    expr: nginx_connections_active{instance="f3.mydomain.com:9113",job="nginx-exporter"} > 3000
+    for: 3m
+    labels:
+      severity: critical
+    annotations:
+      description: "Critical: Nginx high number active connections on the host {{ $labels.instance }} for more than 3 minutes"
+      summary: "Nginx high number active connections"
+
+  - alert: nginx_high_number_active_connections_f4.mydomain.com
+    expr: nginx_connections_active{instance="f4.mydomain.com:9113",job="nginx-exporter"} > 1500
+    for: 3m
+    labels:
+      severity: critical
+    annotations:
+      description: "Critical: Nginx high number active connections on the host {{ $labels.instance }} for more than 3 minutes"
+      summary: "Nginx high number active connections"
+
+- name: php-fpm
+  rules:
+  - alert: php-fpm_is_running
+    expr: phpfpm_up == 0
+    for: 30s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical: PHP-FPM is down on the host {{ $labels.instance }}."
+      description: "PHP-FPM has been down for more than 30 seconds"
+
+  - alert: php-fpm_high_number_accepted_connections
+    expr: rate(phpfpm_accepted_connections_total[5m]) > 30
+    for: 3m
+    labels:
+      severity: critical
+    annotations:
+      description: "Critical: PHP-FPM high number accepted connections(30con/s) on the host {{ $labels.instance }} for more than 3 minutes"
+      summary: "PHP-FPM number active connections is {{ $value }}"
+
+  - alert: php-fpm_number_maximun_active_processes
+    expr: increase (phpfpm_active_max_processes[30s]) > 0
+    for: 10s
+    labels:
+      severity: warning
+    annotations:
+      description: "Warning: PHP-FPM number maximum of active processes is increasing on the host {{ $labels.instance }} for the last 30 seconds"
+      summary: "PHP-FPM number maximum active processes is increasing"
+
+  - alert: php-fpm_max_children_reached_total
+    expr: increase (phpfpm_active_max_processes[30s]) > 0
+    for: 10s
+    labels:
+      severity: critical
+    annotations:
+      description: "Critical: PHP-FPM number max children reached total is increasing on the host {{ $labels.instance }} for the last 30 seconds"
+      summary: "PHP-FPM number max children reached total is increasing"
+
+- name: site
+  rules:
+  - alert: site_down_cms.arnor.su
+    expr: probe_success{instance="https://cms.arnor.su"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical: site '{{ $labels.instance }}' isn't available for more than 1 minutes"
+      description: "Site {{ $labels.instance }} isn't available(down)"
+
+  - alert: site_down
+    expr: probe_success{job="blackbox-http_2xx-general"} == 0
+    for: 3m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical: Site '{{ $labels.instance }}' isn't available for more than 3 minutes"
+      description: "Site {{ $labels.instance }} isn't available(down)"
+
+  - alert: site_is_very_slow
+    expr: sum by (instance) (probe_http_duration_seconds) > 3
+    for: 3m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Warning: Site '{{ $labels.instance }}' is very slow(>3s) for more than 3 minutes"
+      description: "Site {{ $labels.instance }} response for {{ humanize $value}}s"
+
+  - alert: http_status_code_not_200-299
+    expr: probe_http_status_code <= 199 OR probe_http_status_code >= 300
+    for: 3m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical: HTTP status code for the site '{{ $labels.instance }}' isn't 200-299 for more than 3 minutes"
+      description: "HTTP status code is {{ $value }}"
+
+  - alert: ssl_certificate_expire
+    expr: probe_ssl_earliest_cert_expiry - time() < 86400 *30
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Warning: SSL certificate will expire soon for the site '{{ $labels.instance }}'"
+      description: "SSL certificate expires in 30 days"

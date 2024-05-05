@@ -1,0 +1,104 @@
+volumes:
+    prometheus_data: {}
+
+services:
+
+  prometheus:
+    image: prom/prometheus:v2.36.2
+    container_name: prometheus
+    network_mode: host
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+        #    ports:
+        #      - 9090:9090
+    restart: always
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+        #    expose:
+        #      - 9100
+
+  alertmanager:
+    image: quay.io/prometheus/alertmanager
+    container_name: alertmanager
+    network_mode: host
+      #    ports:
+      #      - 9093:9093
+    volumes:
+      - ./alertmanager/:/etc/alertmanager/
+    restart: always
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+    depends_on:
+      - prometheus 
+
+  mysql-exporter:
+    image: prom/mysqld-exporter
+    container_name: mysql-exporter
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - "--mysqld.username=exporter:7!MrfU7S^WgDtp9mxz8@"
+      - "--mysqld.address=localhost:3306"
+        #    ports:
+        #      - 9104:9104
+    depends_on:
+      - prometheus
+        
+  nginx-prometheus-exporter:
+    image: nginx/nginx-prometheus-exporter:1.0
+    container_name: nginx-exporter
+    network_mode: host
+    restart: always
+    command:
+      - -nginx.scrape-uri=https://127.0.0.1/stab_status
+        #    expose: 
+        #      - 9113
+    depends_on:
+      - prometheus
+  php-fpm-prometheus-exporter:
+    image: hipages/php-fpm_exporter
+    container_name: php-fpm-exporter
+    network_mode: host
+    restart: always
+      #    ports:
+      #      - "9253:9253"
+    environment:
+      PHP_FPM_SCRAPE_URI: "tcp://127.0.0.1:9000/status"
+      PHP_FPM_LOG_LEVEL: "info"
+    volumes:
+      - /run/php/php7.2-fpm.sock:/run/php/php7.2-fpm.sock
+    depends_on:
+      - prometheus
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter
+    container_name: blackbox-exporter
+    network_mode: host
+    volumes:
+      - ./exporters/blackbox/:/config/
+    command:
+      - '--config.file=/config/blackbox.yml'
+    restart: unless-stopped
+    logging:
+        driver: "json-file"
+        options:
+          max-size: "5m"
